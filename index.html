@@ -208,40 +208,41 @@
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+
+  .error-msg {
+    margin-top: 16px;
+    padding: 12px;
+    background: #FCEBEB;
+    color: #A32D2D;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  }
 </style>
 </head>
 <body>
 
-<div class="wrapper">
+<div class="wrapper" id="uploadView">
   <div class="brand">
     <div class="brand-badge">AI-Powered KYB</div>
     <h1>Merchant Document Processor</h1>
     <p>Upload a business registration document to extract and verify merchant data automatically using AI.</p>
   </div>
 
-  <!-- 
-    IMPORTANT: Replace the action URL below with your n8n webhook URL.
-    It will look something like:
-    https://your-instance.app.n8n.cloud/webhook/kyb-processor
-  -->
-  <form 
-    class="card" 
-    method="POST" 
-    action="https://adambarfod.app.n8n.cloud/webhook/kyb-processor" 
-    enctype="multipart/form-data"
-    onsubmit="handleSubmit(event)"
-  >
+  <div class="card">
     <div class="upload-zone" id="dropzone">
       <div class="upload-icon" id="uploadIcon">&#x2191;</div>
       <div class="upload-label" id="uploadLabel">Drop your CVR document here</div>
       <div class="upload-hint" id="uploadHint">or click to browse — PDF files only</div>
       <div class="file-name" id="fileName"></div>
-      <input type="file" name="data" accept=".pdf" required onchange="handleFile(this)">
+      <input type="file" id="fileInput" accept=".pdf" onchange="handleFile(this)">
     </div>
 
-    <button type="submit" class="submit-btn" id="submitBtn" disabled>
-      Upload & analyze
+    <button type="button" class="submit-btn" id="submitBtn" disabled onclick="submitDocument()">
+      Upload &amp; analyze
     </button>
+
+    <div class="error-msg" id="errorMsg"></div>
 
     <div class="features">
       <div class="feature">
@@ -257,7 +258,7 @@
         <div class="feature-text">Risk assessment</div>
       </div>
     </div>
-  </form>
+  </div>
 
   <div class="footer">
     Prototype by Adam Grøfte Barfod<br>
@@ -266,6 +267,8 @@
 </div>
 
 <script>
+const WEBHOOK_URL = 'https://adambarfod.app.n8n.cloud/webhook/kyb-processor';
+
 function handleFile(input) {
   const file = input.files[0];
   const zone = document.getElementById('dropzone');
@@ -282,14 +285,48 @@ function handleFile(input) {
     name.textContent = file.name;
     icon.innerHTML = '&#x2713;';
     btn.disabled = false;
+    document.getElementById('errorMsg').style.display = 'none';
   }
 }
 
-function handleSubmit(e) {
+async function submitDocument() {
+  const fileInput = document.getElementById('fileInput');
   const btn = document.getElementById('submitBtn');
+  const errorMsg = document.getElementById('errorMsg');
+
+  if (!fileInput.files[0]) return;
+
   btn.classList.add('loading');
-  btn.innerHTML = '<span class="spinner"></span>Analyzing document...';
-  // Form submits naturally — browser navigates to the webhook response (the HTML report)
+  btn.innerHTML = '<span class="spinner"></span>Analyzing document... (15-30 seconds)';
+  errorMsg.style.display = 'none';
+
+  try {
+    const formData = new FormData();
+    formData.append('data', fileInput.files[0]);
+
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      body: formData
+    });
+
+    const result = await response.json();
+
+    if (result.html) {
+      // Replace the entire page with the rendered HTML report
+      document.open();
+      document.write(result.html);
+      document.close();
+    } else {
+      throw new Error('No HTML report in response');
+    }
+
+  } catch (error) {
+    errorMsg.textContent = 'Error processing document. Please try again. (' + error.message + ')';
+    errorMsg.style.display = 'block';
+    btn.classList.remove('loading');
+    btn.innerHTML = 'Upload &amp; analyze';
+    btn.disabled = false;
+  }
 }
 </script>
 
